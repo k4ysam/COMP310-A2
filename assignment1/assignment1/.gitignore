@@ -1,0 +1,15 @@
+# Compiled executable
+mysh
+
+# Object files
+*.o
+
+# Other build artifacts
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test output files
+/tmp/*_output.txt
