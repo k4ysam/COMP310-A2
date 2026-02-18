@@ -8,6 +8,9 @@
 #include <unistd.h>
 #include "shellmemory.h"
 #include "shell.h"
+#include "pcb.h"
+#include "queue.h"
+#include "scheduler.h"
 
 
 int MAX_ARGS_SIZE = 10; // changed to 10 to support run command
@@ -153,36 +156,41 @@ int print(char *var) {
     return 0;
 }
 
-int source(char *script) {
-    int errCode = 0;
-    char line[MAX_USER_INPUT];
-    FILE *p = fopen(script, "rt");      // the program is in a file
-
-    if (p == NULL) {
+int source(char *script) { 
+    FILE *p = fopen(script, "rt");
+    if (p == NULL)
         return badcommandFileDoesNotExist();
-    }
 
-    fgets(line, MAX_USER_INPUT - 1, p);
-    while (1) {
-        errCode = parseInput(line);     // which calls interpreter()
-        memset(line, 0, sizeof(line));
-
-        if (feof(p)) {
-            break;
-        }
-        fgets(line, MAX_USER_INPUT - 1, p);
-    }
-
+    int start = 0, length = 0;
+    int err = mem_load_program(p, &start, &length); // changed old source to load all program into frame store
     fclose(p);
 
-    return errCode;
+    if (err != 0) {
+        printf("Bad command: Not enough memory\n");
+        return err;
+    }
+
+    PCB *pcb = pcb_create(start, length); // create a PCB for the program
+    if (pcb == NULL) {
+        mem_free_frames(start, length);
+        printf("Bad command: Could not create process\n");
+        return 1;
+    }
+
+    Queue q; // init local queue
+    queue_init(&q);
+    enqueue(&q, pcb);
+    scheduler_run(&q);
+
+    return 0;
 }
 
 // helper
 int is_alphanumeric(char c) {
     return ((c >= '0' && c <= '9') ||
         (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z'));
+        (c >= 'A' && c <= 'Z') ||
+        c == '_');
 }
 
 // helper
