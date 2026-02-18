@@ -3,9 +3,12 @@
 #include <stdio.h>
 #include "shellmemory.h"
 
-/* ── Frame store ─────────────────────────────────────────────────────────── */
+// Frame store 
 
-static char *frame_store[FRAME_STORE_SIZE]; /* NULL = free slot */
+// adding a static array of 1000 string pointers
+static char *frame_store[FRAME_STORE_SIZE]; // NULL = free slot
+
+// A non-NULL pointer is static (file-private) 
 
 static void frame_store_init() {
     int i;
@@ -13,12 +16,14 @@ static void frame_store_init() {
         frame_store[i] = NULL;
 }
 
+// two pass algorithm to load program into frame store
 int mem_load_program(FILE *p, int *start, int *length) {
-    char line[FRAME_LINE_LEN + 2]; /* +2 for '\n' and '\0' */
+    char line[FRAME_LINE_LEN + 2]; // +2 for '\n' and '\0' 
     int count = 0;
     int i, block_start = -1, run = 0;
 
-    /* First pass: count non-blank lines in the file. */
+    // 1st pass: count non-blank lines in the file
+    // this tells us how large a block to look for
     while (fgets(line, sizeof(line), p) != NULL) {
         if (line[0] != '\n' && line[0] != '\0')
             count++;
@@ -30,7 +35,8 @@ int mem_load_program(FILE *p, int *start, int *length) {
         return 0;
     }
 
-    /* Find the first contiguous free block of 'count' frames. */
+    // finding the first contiguous free block of 'count' frames (non overlapping)
+    // when we find a free block, we set block_start to the index of the first frame in the block
     for (i = 0; i < FRAME_STORE_SIZE; i++) {
         if (frame_store[i] == NULL) {
             if (run == 0) block_start = i;
@@ -44,9 +50,9 @@ int mem_load_program(FILE *p, int *start, int *length) {
     }
 
     if (run < count)
-        return 1; /* not enough contiguous space */
+        return 1; // not enough contiguous space 
 
-    /* Second pass: read lines into the allocated block. */
+    // 2nd pass: read lines into the allocated block
     rewind(p);
     int idx = block_start;
     while (fgets(line, sizeof(line), p) != NULL) {
@@ -61,6 +67,7 @@ int mem_load_program(FILE *p, int *start, int *length) {
     return 0;
 }
 
+// freeing  the frames in [start, start+length) back to the free pool
 void mem_free_frames(int start, int length) {
     int i;
     for (i = start; i < start + length; i++) {
@@ -76,7 +83,7 @@ char *mem_get_frame(int idx) {
     return frame_store[idx];
 }
 
-/* ── Variable memory ─────────────────────────────────────────────────────── */
+// Variable memory  
 
 struct memory_struct {
     char *var;
