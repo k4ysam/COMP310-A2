@@ -1,14 +1,18 @@
 CC=gcc
-CFLAGS=
+CFLAGS=-Wall -Wextra -g
 FMT=indent
 
-mysh: shell.c interpreter.c shellmemory.c
-	$(CC) $(CFLAGS) -c shell.c interpreter.c shellmemory.c
-	$(CC) $(CFLAGS) -o mysh shell.o interpreter.o shellmemory.o
+SRCS = shell.c interpreter.c shellmemory.c pcb.c queue.c scheduler.c
+OBJS = $(SRCS:.c=.o)
 
-style: shell.c shell.h interpreter.c interpreter.h shellmemory.c shellmemory.h
+mysh: $(OBJS)
+	$(CC) $(CFLAGS) -o mysh $(OBJS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $<
+
+style: $(SRCS) shell.h interpreter.h shellmemory.h pcb.h queue.h scheduler.h
 	$(FMT) $?
 
-clean: 
-	$(RM) mysh; $(RM) *.o; $(RM) *~
-
+clean:
+	$(RM) mysh $(OBJS) *~
