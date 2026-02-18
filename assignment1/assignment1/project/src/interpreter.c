@@ -37,6 +37,7 @@ int my_cd(char *dirname);
 int print(char *var);
 int run(char *command_args[], int args_size);
 int source(char *script);
+int exec_prog(char *command_args[], int args_size); // accepts args 
 int badcommandFileDoesNotExist();
 
 // Interpret commands and their arguments
@@ -114,6 +115,14 @@ int interpreter(char *command_args[], int args_size) {
         if (args_size != 2)
             return badcommand();
         return source(command_args[1]);
+
+    } else if (strcmp(command_args[0], "exec") == 0) {
+        // exec prog1 [prog2] [prog3] POLICY
+        // args_size: 3 (1 prog), 4 (2 progs), or 5 (3 progs)
+        if (args_size < 3 || args_size > 5)
+            return badcommand();
+        return exec_prog(command_args, args_size);
+
     } else {
         return badcommand();
     }
@@ -312,6 +321,82 @@ int my_cd(char *dirname) {
 
     if (chdir(dirname) == -1) return badcommand_cd(); // if cannot cd return error
 
+    return 0;
+}
+
+
+// Executes up to 3 concurrent programs according to a scheduling policy
+// POLICY is always the last argument and must be FCFS, SJF, RR, or AGING
+// All programs are loaded into the frame store before any of them run
+// If any load fails (file not found, out of memory, duplicate name), none run
+*/
+int exec_prog(char *command_args[], int args_size) {
+    // last arg is the policy, everything between "exec" and the policy is a script
+    char *policy    = command_args[args_size - 1];
+    int   num_progs = args_size - 2;   // 1, 2, or 3
+    char **scripts  = &command_args[1];
+
+    // validating policy
+    if (strcmp(policy, "FCFS")  != 0 &&
+        strcmp(policy, "SJF")   != 0 &&
+        strcmp(policy, "RR")    != 0 &&
+        strcmp(policy, "AGING") != 0) {
+        printf("Bad command: Invalid policy %s\n", policy);
+        return 1;
+    }
+
+    // checking for duplicate script names
+    for (int i = 0; i < num_progs; i++) {
+        for (int j = i + 1; j < num_progs; j++) {
+            if (strcmp(scripts[i], scripts[j]) == 0) {
+                printf("Bad command: Duplicate filename %s\n", scripts[i]);
+                return 1;
+            }
+        }
+    }
+
+    // loading all scripts into the frame store; roll back everything on any error
+    int starts[3], lengths[3];
+    for (int i = 0; i < num_progs; i++) {
+        FILE *p = fopen(scripts[i], "rt");
+        if (p == NULL) {
+            for (int j = 0; j < i; j++)
+                mem_free_frames(starts[j], lengths[j]);
+            printf("Bad command: File not found\n");
+            return 3;
+        }
+        int err = mem_load_program(p, &starts[i], &lengths[i]);
+        fclose(p);
+        if (err != 0) {
+            for (int j = 0; j < i; j++)
+                mem_free_frames(starts[j], lengths[j]);
+            printf("Bad command: Not enough memory\n");
+            return 1;
+        }
+    }
+
+    // creating PCBs and enqueuing them in the order they were given (FCFS order)
+    Queue q;
+    queue_init(&q);
+    for (int i = 0; i < num_progs; i++) {
+        PCB *pcb = pcb_create(starts[i], lengths[i]);
+        if (pcb == NULL) {
+            // drain any PCBs already queued
+            PCB *tmp;
+            while ((tmp = dequeue(&q)) != NULL) {
+                mem_free_frames(tmp->mem_start, tmp->mem_len);
+                pcb_free(tmp);
+            }
+            // free frames not yet claimed by a PCB
+            for (int j = i; j < num_progs; j++)
+                mem_free_frames(starts[j], lengths[j]);
+            printf("Bad command: Could not create process\n");
+            return 1;
+        }
+        enqueue(&q, pcb);
+    }
+
+    scheduler_run(&q);
     return 0;
 }
 
